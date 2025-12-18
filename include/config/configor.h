@@ -232,13 +232,29 @@ public:
 
         static std::string ReferIMU;
 
+        // Original rosbag input (kept for backward compatibility)
         static std::string BagPath;
         static double BeginTime;
         static double Duration;
 
+        // Modified: Direct file input mode configuration
+        // InputMode: "rosbag" (default) or "files"
+        static std::string InputMode;
+
+        // Direct file input paths (used when InputMode == "files")
+        // IMU data directory containing CSV files (inspva.csv, rawimu.csv)
+        static std::string IMUDataDir;
+        // LiDAR data directories (map from topic name to directory containing PCD files)
+        static std::map<std::string, std::string> LiDARDataDirs;
+        // Camera data directories (map from topic name to directory containing image files)
+        static std::map<std::string, std::string> CameraDataDirs;
+
         static std::string OutputPath;
         const static std::string PkgPath;
         const static std::string DebugPath;
+
+        // Helper to check if using direct file input mode
+        static bool IsDirectFileMode() { return InputMode == "files"; }
 
     public:
         template <class Archive>
@@ -249,6 +265,16 @@ public:
                // CEREAL_NVP(EventTopics),
                CEREAL_NVP(ReferIMU), CEREAL_NVP(BagPath), CEREAL_NVP(BeginTime),
                CEREAL_NVP(Duration), CEREAL_NVP(OutputPath));
+            // Modified: optional direct file input fields
+            try {
+                ar(CEREAL_NVP(InputMode));
+                if (InputMode == "files") {
+                    ar(CEREAL_NVP(IMUDataDir), CEREAL_NVP(LiDARDataDirs), CEREAL_NVP(CameraDataDirs));
+                }
+            } catch (...) {
+                // Default to rosbag mode if InputMode is not specified
+                InputMode = "rosbag";
+            }
         }
     } dataStream;
 

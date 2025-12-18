@@ -36,10 +36,12 @@
 #include "spdlog/spdlog.h"
 #include "util/status.hpp"
 #include "magic_enum_flags.hpp"
-#include "ros/package.h"
+// ROS dependency removed for standalone build
+// #include "ros/package.h"
 #include "filesystem"
 #include "cereal/types/vector.hpp"
 #include "cereal/types/set.hpp"
+#include "cereal/types/map.hpp"  // Modified: for map serialization
 
 #include <calib/time_deriv.hpp>
 
@@ -85,8 +87,15 @@ std::string Configor::DataStream::BagPath = {};
 double Configor::DataStream::BeginTime = {};
 double Configor::DataStream::Duration = {};
 std::string Configor::DataStream::OutputPath = {};
-const std::string Configor::DataStream::PkgPath = ros::package::getPath("ikalibr");
+// Modified: ROS package path removed, using current working directory instead
+const std::string Configor::DataStream::PkgPath = std::filesystem::current_path().string();
 const std::string Configor::DataStream::DebugPath = PkgPath + "/debug/";
+
+// Modified: Direct file input mode support
+std::string Configor::DataStream::InputMode = "rosbag";  // default to rosbag for backward compatibility
+std::string Configor::DataStream::IMUDataDir = {};
+std::map<std::string, std::string> Configor::DataStream::LiDARDataDirs = {};
+std::map<std::string, std::string> Configor::DataStream::CameraDataDirs = {};
 
 std::string Configor::Prior::SpatTempPrioriPath = {};
 double Configor::Prior::GravityNorm = {};
@@ -436,8 +445,26 @@ void Configor::CheckConfigure() {
         throw Status(Status::ERROR, "the reference IMU is not set, it should be one of the IMUs!");
     }
 
-    if (!std::filesystem::exists(DataStream::BagPath)) {
-        throw Status(Status::ERROR, "can not find the ros bag (i.e., DataStream::BagPath)!");
+    // Modified: Only check BagPath in rosbag mode
+    if (!DataStream::IsDirectFileMode()) {
+        if (!std::filesystem::exists(DataStream::BagPath)) {
+            throw Status(Status::ERROR, "can not find the ros bag (i.e., DataStream::BagPath)!");
+        }
+    } else {
+        // In direct file mode, check that data directories exist
+        if (!DataStream::IMUDataDir.empty() && !std::filesystem::exists(DataStream::IMUDataDir)) {
+            throw Status(Status::ERROR, "can not find IMU data directory: '{}'!", DataStream::IMUDataDir);
+        }
+        for (const auto &[topic, dir] : DataStream::LiDARDataDirs) {
+            if (!std::filesystem::exists(dir)) {
+                throw Status(Status::ERROR, "can not find LiDAR data directory for '{}': '{}'!", topic, dir);
+            }
+        }
+        for (const auto &[topic, dir] : DataStream::CameraDataDirs) {
+            if (!std::filesystem::exists(dir)) {
+                throw Status(Status::ERROR, "can not find Camera data directory for '{}': '{}'!", topic, dir);
+            }
+        }
     }
     if (DataStream::OutputPath.empty()) {
         throw Status(Status::ERROR, "the output path (i.e., DataStream::OutputPath) is empty!");
