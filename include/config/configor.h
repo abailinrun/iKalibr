@@ -286,6 +286,17 @@ public:
         static double TimeOffsetPadding;
         static double ReadoutTimePadding;
         static double MapDownSample;
+        // Camera intrinsic self-calibration option
+        // When true: Enable COLMAP BA to refine focal length and principal point
+        //   - Uses ba_refine_focal_length=1, ba_refine_principal_point=1 in COLMAP
+        //   - Uses COLMAP-estimated intrinsics instead of config file intrinsics
+        // When false (default): Use pre-calibrated intrinsics
+        //   - Uses ba_refine_focal_length=0, ba_refine_principal_point=0 in COLMAP
+        //   - Uses config file intrinsics (traditional iKalibr behavior)
+        // Reference: CT-LIC (arXiv:2501.02821) demonstrates that intrinsic self-calibration
+        // can achieve accuracy comparable to target-based calibration when combined with
+        // direct 3D observations
+        static bool CameraIntrinsicSelfCalib;
 
         static struct KnotTimeDist {
             static double SO3Spline;
@@ -348,6 +359,12 @@ public:
                cereal::make_nvp("KnotTimeDist", knotTimeDist),
                cereal::make_nvp("NDTLiDAROdometer", ndtLiDAROdometer),
                cereal::make_nvp("LiDARDataAssociate", lidarDataAssociate));
+            // Optional field for backward compatibility (default: false)
+            try {
+                ar(CEREAL_NVP(CameraIntrinsicSelfCalib));
+            } catch (...) {
+                CameraIntrinsicSelfCalib = false;
+            }
         }
     } prior;
 
