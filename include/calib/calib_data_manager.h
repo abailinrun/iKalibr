@@ -44,7 +44,10 @@
 #include "sensor/event.h"
 #include "util/status.hpp"
 #include "veta/veta.h"
+// Modified: rosbag dependency made optional
+#ifndef IKALIBR_NO_ROS
 #include "rosbag/bag.h"
+#endif
 
 namespace {
 bool IKALIBR_UNIQUE_NAME(_2_) = ns_ikalibr::_1_(__FILE__);
@@ -294,10 +297,19 @@ protected:
         }
     }
 
+    // Modified: rosbag helper function only available when ROS is enabled
+#ifndef IKALIBR_NO_ROS
     static std::uint32_t MessageNumInTopic(const rosbag::Bag *bag,
                                            const std::string &topic,
                                            const ros::Time &begTime,
                                            const ros::Time &endTime);
+#endif
+
+    // Modified: Direct file loading methods
+    void LoadCalibDataFromFiles();
+    void LoadIMUDataFromCSV(const std::string &topic, const std::string &dataDir);
+    void LoadLiDARDataFromPCD(const std::string &topic, const std::string &dataDir);
+    void LoadCameraDataFromImages(const std::string &topic, const std::string &dataDir);
 };
 
 }  // namespace ns_ikalibr

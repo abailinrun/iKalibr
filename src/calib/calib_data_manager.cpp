@@ -34,7 +34,10 @@
 
 #include "calib/calib_data_manager.h"
 #include "core/optical_flow_trace.h"
+// Modified: rosbag dependency made optional
+#ifndef IKALIBR_NO_ROS
 #include "rosbag/view.h"
+#endif
 #include "sensor/camera_data_loader.h"
 #include "sensor/depth_data_loader.h"
 #include "sensor/event_data_loader.h"
@@ -43,6 +46,12 @@
 #include "sensor/radar_data_loader.h"
 #include "spdlog/spdlog.h"
 #include "util/tqdm.h"
+// Modified: Direct file loading dependencies
+#include <pcl/io/pcd_io.h>
+#include <opencv2/imgcodecs.hpp>
+#include <fstream>
+#include <sstream>
+#include <regex>
 
 namespace {
 bool IKALIBR_UNIQUE_NAME(_2_) = ns_ikalibr::_1_(__FILE__);
@@ -61,6 +70,18 @@ CalibDataManager::Ptr CalibDataManager::Create() { return std::make_shared<Calib
 void CalibDataManager::LoadCalibData() {
     spdlog::info("loading calibration data...");
 
+    // Modified: Check input mode and dispatch to appropriate loader
+    if (Configor::DataStream::IsDirectFileMode()) {
+        spdlog::info("using direct file input mode");
+        LoadCalibDataFromFiles();
+        return;
+    }
+
+    // Modified: rosbag loading only available when ROS is enabled
+#ifdef IKALIBR_NO_ROS
+    throw Status(Status::CRITICAL, "rosbag input mode is not available in this build (compiled with IKALIBR_NO_ROS). Use InputMode: 'files' instead.");
+#else
+    spdlog::info("using rosbag input mode");
     // open the ros bag
     auto bag = std::make_unique<rosbag::Bag>();
     if (!std::filesystem::exists(Configor::DataStream::BagPath)) {
@@ -375,6 +396,7 @@ void CalibDataManager::LoadCalibData() {
                          topic, freq);
         }
     }
+#endif  // IKALIBR_NO_ROS
 }
 
 void CalibDataManager::AdjustCalibDataSequence() {
@@ -745,6 +767,8 @@ void CalibDataManager::OutputDataStatus() const {
     spdlog::info("calib start time: '{:+010.5f}' (s), calib end time: '{:+010.5f}' (s)\n",
                  GetCalibStartTimestamp(), GetCalibEndTimestamp());
 }
+// Modified: rosbag helper function only available when ROS is enabled
+#ifndef IKALIBR_NO_ROS
 std::uint32_t CalibDataManager::MessageNumInTopic(const rosbag::Bag *bag,
                                                   const std::string &topic,
                                                   const ros::Time &begTime,
@@ -753,6 +777,7 @@ std::uint32_t CalibDataManager::MessageNumInTopic(const rosbag::Bag *bag,
     view.addQuery(*bag, rosbag::TopicQuery({topic}), begTime, endTime);
     return view.size();
 }
+#endif
 
 // -----------
 // time access
@@ -920,4 +945,235 @@ const std::vector<OpticalFlowTripleTrace::Ptr> &CalibDataManager::GetVisualOptic
     const std::string &visualTopic) const {
     return _visualOpticalFlowTrace.at(visualTopic);
 }
+
+// =====================================================
+// Modified: Direct file loading implementation
+// =====================================================
+
+namespace {
+// Helper: extract timestamp from filename (expects format like "1702345678.123456.pcd" or similar)
+double ExtractTimestampFromFilename(const std::string &filename) {
+    // Try to extract timestamp from filename
+    // Supports formats: "1702345678.123456.pcd", "frame_1702345678.123456.png", etc.
+    std::regex timestamp_pattern(R"((\d+\.\d+))");
+    std::smatch match;
+    if (std::regex_search(filename, match, timestamp_pattern)) {
+        return std::stod(match[1].str());
+    }
+    // If no decimal timestamp found, try integer
+    std::regex int_pattern(R"((\d{10,}))");
+    if (std::regex_search(filename, match, int_pattern)) {
+        return std::stod(match[1].str());
+    }
+    throw ns_ikalibr::Status(ns_ikalibr::Status::ERROR, "Cannot extract timestamp from filename: {}", filename);
+}
+
+// Helper: get sorted list of files in directory with given extension
+std::vector<std::pair<double, std::string>> GetSortedFilesWithTimestamp(
+    const std::string &dir, const std::string &extension) {
+    std::vector<std::pair<double, std::string>> files;
+    for (const auto &entry : std::filesystem::directory_iterator(dir)) {
+        if (entry.is_regular_file()) {
+            std::string filename = entry.path().filename().string();
+            if (filename.size() >= extension.size() &&
+                filename.substr(filename.size() - extension.size()) == extension) {
+                try {
+                    double timestamp = ExtractTimestampFromFilename(filename);
+                    files.emplace_back(timestamp, entry.path().string());
+                } catch (...) {
+                    spdlog::warn("Skipping file with unparseable timestamp: {}", filename);
+                }
+            }
+        }
+    }
+    // Sort by timestamp
+    std::sort(files.begin(), files.end(),
+              [](const auto &a, const auto &b) { return a.first < b.first; });
+    return files;
+}
+}  // anonymous namespace
+
+void CalibDataManager::LoadCalibDataFromFiles() {
+    spdlog::info("loading calibration data from files...");
+
+    // Load IMU data
+    for (const auto &[topic, config] : Configor::DataStream::IMUTopics) {
+        spdlog::info("loading IMU data for topic '{}'...", topic);
+        LoadIMUDataFromCSV(topic, Configor::DataStream::IMUDataDir);
+    }
+
+    // Load LiDAR data
+    for (const auto &[topic, config] : Configor::DataStream::LiDARTopics) {
+        if (auto it = Configor::DataStream::LiDARDataDirs.find(topic);
+            it != Configor::DataStream::LiDARDataDirs.end()) {
+            spdlog::info("loading LiDAR data for topic '{}' from '{}'...", topic, it->second);
+            LoadLiDARDataFromPCD(topic, it->second);
+        } else {
+            throw Status(Status::ERROR, "No LiDAR data directory specified for topic '{}'", topic);
+        }
+    }
+
+    // Load Camera data
+    for (const auto &[topic, config] : Configor::DataStream::CameraTopics) {
+        if (auto it = Configor::DataStream::CameraDataDirs.find(topic);
+            it != Configor::DataStream::CameraDataDirs.end()) {
+            spdlog::info("loading Camera data for topic '{}' from '{}'...", topic, it->second);
+            LoadCameraDataFromImages(topic, it->second);
+        } else {
+            throw Status(Status::ERROR, "No Camera data directory specified for topic '{}'", topic);
+        }
+    }
+
+    // Verify data was loaded
+    for (const auto &[topic, _] : Configor::DataStream::IMUTopics) {
+        CheckTopicExists(topic, _imuMes);
+    }
+    for (const auto &[topic, _] : Configor::DataStream::LiDARTopics) {
+        CheckTopicExists(topic, _lidarMes);
+    }
+    for (const auto &[topic, _] : Configor::DataStream::CameraTopics) {
+        CheckTopicExists(topic, _camMes);
+    }
+
+    OutputDataStatus();
+    AdjustCalibDataSequence();
+    AlignTimestamp();
+
+    // Velocity camera frequency check
+    for (const auto &[topic, _] : Configor::DataStream::VelCameraTopics()) {
+        auto freq = GetCameraAvgFrequency(topic);
+        spdlog::info("sampling frequency for camera '{}': {:.3f}", topic, freq);
+        if (freq < 29.0) {
+            throw Status(
+                Status::WARNING,
+                "Sampling frequency of vel camera '{}' (freq: {:.3f}) is too small!!! "
+                "Frequency larger than 30 Hz is required!!! Please change 'ScaleSplineType' of "
+                "this camera to 'LIN_POS_SPLINE' which would perform a SfM-based calibration!!! Do "
+                "not forget to change its weight!",
+                topic, freq);
+        }
+    }
+}
+
+void CalibDataManager::LoadIMUDataFromCSV(const std::string &topic, const std::string &dataDir) {
+    // Look for rawimu.csv file
+    std::string rawimuPath = dataDir + "/rawimu.csv";
+    if (!std::filesystem::exists(rawimuPath)) {
+        throw Status(Status::ERROR, "IMU data file not found: {}", rawimuPath);
+    }
+
+    std::ifstream file(rawimuPath);
+    if (!file.is_open()) {
+        throw Status(Status::ERROR, "Cannot open IMU data file: {}", rawimuPath);
+    }
+
+    std::string line;
+    // Skip header if present
+    std::getline(file, line);
+
+    auto &imuData = _imuMes[topic];
+    while (std::getline(file, line)) {
+        std::stringstream ss(line);
+        std::string token;
+        std::vector<double> values;
+
+        while (std::getline(ss, token, ',')) {
+            try {
+                values.push_back(std::stod(token));
+            } catch (...) {
+                continue;
+            }
+        }
+
+        // Expect: timestamp, gyro_x, gyro_y, gyro_z, accel_x, accel_y, accel_z
+        if (values.size() >= 7) {
+            double timestamp = values[0];
+            Eigen::Vector3d gyro(values[1], values[2], values[3]);
+            Eigen::Vector3d accel(values[4], values[5], values[6]);
+            imuData.push_back(IMUFrame::Create(timestamp, gyro, accel));
+        }
+    }
+
+    spdlog::info("loaded {} IMU frames from {}", imuData.size(), rawimuPath);
+}
+
+void CalibDataManager::LoadLiDARDataFromPCD(const std::string &topic, const std::string &dataDir) {
+    auto files = GetSortedFilesWithTimestamp(dataDir, ".pcd");
+    if (files.empty()) {
+        throw Status(Status::ERROR, "No PCD files found in directory: {}", dataDir);
+    }
+
+    auto &lidarData = _lidarMes[topic];
+    auto bar = std::make_shared<tqdm>();
+
+    for (size_t i = 0; i < files.size(); ++i) {
+        bar->progress(static_cast<int>(i), static_cast<int>(files.size()));
+
+        double timestamp = files[i].first;
+        const std::string &filepath = files[i].second;
+
+        // Load PCD file
+        auto cloud = pcl::make_shared<IKalibrPointCloud>();
+        if (pcl::io::loadPCDFile<IKalibrPoint>(filepath, *cloud) == -1) {
+            spdlog::warn("Failed to load PCD file: {}", filepath);
+            continue;
+        }
+
+        // Set timestamp for each point
+        for (auto &p : *cloud) {
+            p.timestamp = timestamp;
+        }
+
+        lidarData.push_back(LiDARFrame::Create(timestamp, cloud));
+    }
+    bar->finish();
+
+    spdlog::info("loaded {} LiDAR frames from {}", lidarData.size(), dataDir);
+}
+
+void CalibDataManager::LoadCameraDataFromImages(const std::string &topic, const std::string &dataDir) {
+    // Support common image extensions
+    std::vector<std::pair<double, std::string>> files;
+    for (const auto &ext : {".png", ".jpg", ".jpeg", ".PNG", ".JPG", ".JPEG"}) {
+        auto extFiles = GetSortedFilesWithTimestamp(dataDir, ext);
+        files.insert(files.end(), extFiles.begin(), extFiles.end());
+    }
+
+    // Sort by timestamp
+    std::sort(files.begin(), files.end(),
+              [](const auto &a, const auto &b) { return a.first < b.first; });
+
+    if (files.empty()) {
+        throw Status(Status::ERROR, "No image files found in directory: {}", dataDir);
+    }
+
+    auto &camData = _camMes[topic];
+    auto bar = std::make_shared<tqdm>();
+
+    for (size_t i = 0; i < files.size(); ++i) {
+        bar->progress(static_cast<int>(i), static_cast<int>(files.size()));
+
+        double timestamp = files[i].first;
+        const std::string &filepath = files[i].second;
+
+        // Load image
+        cv::Mat colorImg = cv::imread(filepath, cv::IMREAD_COLOR);
+        if (colorImg.empty()) {
+            spdlog::warn("Failed to load image: {}", filepath);
+            continue;
+        }
+
+        // Convert to grayscale
+        cv::Mat grayImg;
+        cv::cvtColor(colorImg, grayImg, cv::COLOR_BGR2GRAY);
+
+        auto frame = CameraFrame::Create(timestamp, grayImg, colorImg);
+        frame->SetId(static_cast<ns_veta::IndexT>(timestamp * 1E3));
+        camData.push_back(frame);
+    }
+    bar->finish();
+
+    spdlog::info("loaded {} camera frames from {}", camData.size(), dataDir);
+}
+
 }  // namespace ns_ikalibr
