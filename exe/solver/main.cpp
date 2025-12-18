@@ -32,7 +32,7 @@
 // ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 // POSSIBILITY OF SUCH DAMAGE.
 
-#include "ros/ros.h"
+// Modified: ROS dependency removed for standalone build
 #include "spdlog/spdlog.h"
 #include "config/configor.h"
 #include "util/status.hpp"
@@ -48,15 +48,24 @@ namespace {
 bool IKALIBR_UNIQUE_NAME(_2_) = ns_ikalibr::_1_(__FILE__);
 }
 
+void PrintUsage(const char* prog_name) {
+    std::cerr << "Usage: " << prog_name << " <config_path.yaml>" << std::endl;
+    std::cerr << "  config_path.yaml: Path to the iKalibr configuration file" << std::endl;
+}
+
 int main(int argc, char **argv) {
-    ros::init(argc, argv, "ikalibr_prog");
+    // ROS initialization removed - using command line arguments directly
     try {
         ns_ikalibr::ConfigSpdlog();
 
         ns_ikalibr::PrintIKalibrLibInfo();
 
-        // load settings
-        auto configPath = ns_ikalibr::GetParamFromROS<std::string>("/ikalibr_prog/config_path");
+        // load settings from command line argument
+        if (argc < 2) {
+            PrintUsage(argv[0]);
+            return 1;
+        }
+        std::string configPath = argv[1];
         spdlog::info("loading configure from yaml file '{}'...", configPath);
         if (!std::filesystem::exists(configPath)) {
             throw ns_ikalibr::Status(ns_ikalibr::Status::CRITICAL,
@@ -134,8 +143,9 @@ int main(int argc, char **argv) {
         // an unknown exception not thrown by this program
         static constexpr auto WECStyle = fmt::emphasis::italic | fmt::fg(fmt::color::red);
         spdlog::critical(fmt::format(WECStyle, "unknown error happened: '{}'", e.what()));
+        return 1;
     }
 
-    ros::shutdown();
+    // ROS shutdown removed
     return 0;
 }

@@ -52,7 +52,7 @@ std::vector<Vector2d.
  */
 #include "veta/type_def.hpp"
 #include "magic_enum.hpp"
-#include "ros/ros.h"
+// Modified: ROS dependency removed for standalone build
 #include "ctraj/utils/sophus_utils.hpp"
 #include "spdlog/fmt/fmt.h"
 #include "opencv2/core.hpp"
@@ -79,8 +79,9 @@ Type LagrangePolynomialTripleMidFOD(const std::array<Type, 3> &xData,
 template <class Type>
 Type LagrangePolynomialTripleMidFOD(const std::array<std::pair<Type, Type>, 3> &data);
 
-template <class Type>
-Type GetParamFromROS(const std::string &param);
+// GetParamFromROS is deprecated in standalone build - use command line arguments instead
+// template <class Type>
+// Type GetParamFromROS(const std::string &param);
 
 std::string UpperString(std::string s);
 

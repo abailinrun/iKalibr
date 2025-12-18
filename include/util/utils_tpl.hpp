@@ -89,14 +89,15 @@ Type LagrangePolynomialTripleMidFOD(const std::array<std::pair<Type, Type>, 3> &
     return LagrangePolynomialTripleMidFOD(xData, yData);
 }
 
-template <class Type>
-Type GetParamFromROS(const std::string &param) {
-    Type par;
-    if (!ros::param::get(param, par)) {
-        throw std::runtime_error("the ros param couldn't obtained from '" + param + "'.");
-    }
-    return par;
-}
+// GetParamFromROS is deprecated - use command line arguments instead
+// template <class Type>
+// Type GetParamFromROS(const std::string &param) {
+//     Type par;
+//     if (!ros::param::get(param, par)) {
+//         throw std::runtime_error("the ros param couldn't obtained from '" + param + "'.");
+//     }
+//     return par;
+// }
 
 template <class EnumType>
 bool IsOptionWith(EnumType desired, EnumType current) {
