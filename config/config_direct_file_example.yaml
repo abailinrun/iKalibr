@@ -1,0 +1,111 @@
+# iKalibr Configuration File - Direct File Input Mode Example
+# This configuration shows how to use the direct file input mode
+# instead of rosbag for sensor data.
+
+DataStream:
+  # Modified: Direct file input mode (alternative to rosbag)
+  # InputMode: "rosbag" (default) or "files"
+  InputMode: "files"
+
+  # IMU Configuration
+  IMUTopics:
+    /imu/data:
+      Type: SENSOR_IMU
+      Intrinsics: /path/to/imu_intrinsics.yaml
+      AcceWeight: 1.0
+      GyroWeight: 1.0
+
+  # Reference IMU (the base coordinate frame)
+  ReferIMU: /imu/data
+
+  # LiDAR Configuration
+  LiDARTopics:
+    /lidar_front/points:
+      Type: RS_M1
+      Weight: 1.0
+    /lidar_left/points:
+      Type: RS_M1
+      Weight: 1.0
+    /lidar_right/points:
+      Type: RS_M1
+      Weight: 1.0
+    /lidar_rear/points:
+      Type: RS_M1
+      Weight: 1.0
+
+  # Camera Configuration
+  CameraTopics:
+    /camera_front/image:
+      Type: SENSOR_IMAGE
+      Intrinsics: /path/to/camera_front_intrinsics.yaml
+      Weight: 1.0
+      TrackLengthMin: 10
+      ScaleSplineType: LINEAR
+
+  # Radar Configuration (empty for now)
+  RadarTopics: {}
+
+  # RGBD Configuration (empty for now)
+  RGBDTopics: {}
+
+  # Output path for calibration results
+  OutputPath: /path/to/output
+
+  # === Direct File Input Configuration (used when InputMode == "files") ===
+
+  # IMU data directory containing CSV files
+  # Expected file: rawimu.csv with format:
+  # timestamp,gyro_x,gyro_y,gyro_z,accel_x,accel_y,accel_z
+  IMUDataDir: /path/to/imu_data
+
+  # LiDAR data directories (map from topic name to directory)
+  # Each directory should contain PCD files with timestamps in filename
+  # Expected format: <timestamp>.pcd or data_<timestamp>.pcd
+  LiDARDataDirs:
+    /lidar_front/points: /path/to/lidar_front_pcd
+    /lidar_left/points: /path/to/lidar_left_pcd
+    /lidar_right/points: /path/to/lidar_right_pcd
+    /lidar_rear/points: /path/to/lidar_rear_pcd
+
+  # Camera data directories (map from topic name to directory)
+  # Each directory should contain image files (PNG/JPG) with timestamps in filename
+  # Expected format: <timestamp>.png or <timestamp>.jpg
+  CameraDataDirs:
+    /camera_front/image: /path/to/camera_front_images
+
+  # === Rosbag Configuration (used when InputMode == "rosbag") ===
+  # These are ignored when InputMode is "files"
+  BagPath: ""
+  BeginTime: 0.0
+  Duration: -1.0
+
+Prior:
+  SpatTempPrioriPath: ""
+  GravityNorm: 9.8
+  OptTemporalParams: true
+  TimeOffsetPadding: 0.02
+  ReadoutTimePadding: 0.01
+  MapDownSample: 0.1
+
+  KnotTimeDist:
+    SO3Spline: 0.1
+    ScaleSpline: 0.1
+
+  NDTLiDAROdometer:
+    Resolution: 0.5
+    KeyFrameDownSample: 0.5
+
+  LiDARDataAssociate:
+    PointToSurfelMax: 0.5
+    PlanarityMin: 0.6
+
+Preference:
+  UseCudaInSolving: false
+  Outputs:
+    - BSplines
+    - LiDARMaps
+    - VisualMaps
+  OutputDataFormat: YAML
+  ThreadsToUse: 8
+  SplineScaleInViewer: 1.0
+  CoordSScaleInViewer: 0.5
