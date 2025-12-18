@@ -35,6 +35,9 @@
 #ifndef IKALIBR_LIDAR_DATA_LOADER_H
 #define IKALIBR_LIDAR_DATA_LOADER_H
 
+// Modified: This file is only used for rosbag mode
+#ifndef IKALIBR_NO_ROS
+
 #include "sensor/lidar.h"
 #include "rosbag/message_instance.h"
 #include "util/enum_cast.hpp"
@@ -235,5 +238,7 @@ public:
 };
 
 }  // namespace ns_ikalibr
+
+#endif  // IKALIBR_NO_ROS
 
 #endif  // IKALIBR_LIDAR_DATA_LOADER_H

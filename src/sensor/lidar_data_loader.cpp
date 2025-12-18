@@ -32,6 +32,9 @@
 // ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 // POSSIBILITY OF SUCH DAMAGE.
 
+// Modified: This file is only used for rosbag mode
+#ifndef IKALIBR_NO_ROS
+
 //
 // Created by csl on 10/4/22.
 //
@@ -607,3 +610,5 @@ LiDARFrame::Ptr RSLIDAR_POINTS::UnpackScan(const rosbag::MessageInstance &msgIns
 }
 
 }  // namespace ns_ikalibr
+
+#endif  // IKALIBR_NO_ROS

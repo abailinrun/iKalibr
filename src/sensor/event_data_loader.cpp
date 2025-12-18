@@ -32,6 +32,9 @@
 // ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 // POSSIBILITY OF SUCH DAMAGE.
 
+// Modified: This file is only used for rosbag mode
+#ifndef IKALIBR_NO_ROS
+
 #include "sensor/event_data_loader.h"
 #include "ikalibr/PropheseeEventArray.h"
 #include "ikalibr/DVSEventArray.h"
@@ -121,3 +124,5 @@ EventArray::Ptr DVSEventDataLoader::UnpackData(const rosbag::MessageInstance& ms
     }
 }
 }  // namespace ns_ikalibr
+
+#endif  // IKALIBR_NO_ROS

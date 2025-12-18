@@ -35,6 +35,9 @@
 #ifndef IKALIBR_DEPTH_DATA_LOADER_H
 #define IKALIBR_DEPTH_DATA_LOADER_H
 
+// Modified: This file is only used for rosbag mode
+#ifndef IKALIBR_NO_ROS
+
 #include "sensor/camera_data_loader.h"
 #include "sensor/rgbd.h"
 
@@ -101,5 +104,7 @@ public:
 };
 
 }  // namespace ns_ikalibr
+
+#endif  // IKALIBR_NO_ROS
 
 #endif  // IKALIBR_DEPTH_DATA_LOADER_H

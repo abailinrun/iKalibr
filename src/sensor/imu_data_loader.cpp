@@ -32,6 +32,9 @@
 // ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 // POSSIBILITY OF SUCH DAMAGE.
 
+// Modified: This file is only used for rosbag mode
+#ifndef IKALIBR_NO_ROS
+
 #include "sensor/imu_data_loader.h"
 #include "util/enum_cast.hpp"
 #include "util/status.hpp"
@@ -147,3 +150,5 @@ IMUFrame::Ptr SbgIMULoader::UnpackFrame(const rosbag::MessageInstance &msgInstan
     }
 }
 }  // namespace ns_ikalibr
+
+#endif  // IKALIBR_NO_ROS

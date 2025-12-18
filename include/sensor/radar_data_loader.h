@@ -35,6 +35,9 @@
 #ifndef IKALIBR_RADAR_DATA_LOADER_H
 #define IKALIBR_RADAR_DATA_LOADER_H
 
+// Modified: This file is only used for rosbag mode
+#ifndef IKALIBR_NO_ROS
+
 #include "rosbag/message_instance.h"
 #include "sensor/radar.h"
 #include "util/cloud_define.hpp"
@@ -148,5 +151,7 @@ public:
     RadarTargetArray::Ptr UnpackScan(const rosbag::MessageInstance &msgInstance) override;
 };
 }  // namespace ns_ikalibr
+
+#endif  // IKALIBR_NO_ROS
 
 #endif  // IKALIBR_RADAR_DATA_LOADER_H
