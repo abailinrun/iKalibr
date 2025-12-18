@@ -44,7 +44,10 @@
 #include "opencv2/highgui.hpp"
 #include "opencv2/imgproc.hpp"
 #include "pangolin/display/display.h"
+// Modified: ROS package include made conditional
+#ifndef IKALIBR_NO_ROS
 #include "ros/package.h"
+#endif
 #include "sensor/camera_data_loader.h"
 #include "solver/calib_solver.h"
 #include "spdlog/sinks/basic_file_sink.h"
@@ -113,7 +116,12 @@ CalibSolver::CalibSolver(CalibDataManager::Ptr calibDataManager,
 
     // create viewer
     _viewer = Viewer::Create(_parMagr, _splines);
+    // Modified: Use Configor::DataStream::PkgPath instead of ros::package::getPath
+#ifndef IKALIBR_NO_ROS
     auto modelPath = ros::package::getPath("ikalibr") + "/model/ikalibr.obj";
+#else
+    auto modelPath = Configor::DataStream::PkgPath + "/model/ikalibr.obj";
+#endif
     _viewer->FillEmptyViews(modelPath);
 
     // pass the 'CeresViewerCallBack' to ceres option so that update the viewer after every

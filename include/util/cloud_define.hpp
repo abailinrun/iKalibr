@@ -35,7 +35,10 @@
 #ifndef IKALIBR_CLOUD_DEFINE_HPP
 #define IKALIBR_CLOUD_DEFINE_HPP
 
+// Modified: pcl_ros is only available with ROS
+#ifndef IKALIBR_NO_ROS
 #include "pcl_ros/point_cloud.h"
+#endif
 #include "pcl/pcl_macros.h"
 #include "pcl/point_cloud.h"
 #include "pcl/point_types.h"
