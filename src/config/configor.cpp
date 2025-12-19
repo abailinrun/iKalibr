@@ -102,6 +102,8 @@ double Configor::Prior::GravityNorm = {};
 double Configor::Prior::TimeOffsetPadding = {};
 double Configor::Prior::ReadoutTimePadding = {};
 double Configor::Prior::MapDownSample = {};
+// Camera intrinsic self-calibration (default: false, use pre-calibrated intrinsics)
+bool Configor::Prior::CameraIntrinsicSelfCalib = false;
 
 double Configor::Prior::KnotTimeDist::SO3Spline = {};
 double Configor::Prior::KnotTimeDist::ScaleSpline = {};

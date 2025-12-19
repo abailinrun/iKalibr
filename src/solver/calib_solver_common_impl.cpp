@@ -394,6 +394,10 @@ void CalibSolver::StoreImagesForSfM(const std::string &topic,
         "---------------------------------------------------------------------------------");
     logger->info("- Way 2: COLMAP MAPPER -");
     double init_max_error = IsRSCamera(topic) ? 2.0 : 1.0;
+    // Determine intrinsic refinement settings based on config
+    // When CameraIntrinsicSelfCalib is true, enable COLMAP to refine focal length and principal point
+    // Reference: CT-LIC (arXiv:2501.02821) demonstrates intrinsic self-calibration approach
+    const int refine_intrinsic = Configor::Prior::CameraIntrinsicSelfCalib ? 1 : 0;
     // reconstruction
     logger->info(
         "------------------------\n"
@@ -404,9 +408,10 @@ void CalibSolver::StoreImagesForSfM(const std::string &topic,
         "--Mapper.init_min_tri_angle 25 "
         "--Mapper.init_max_error {} "
         "--Mapper.tri_min_angle 3 "
-        "--Mapper.ba_refine_focal_length 0 "
-        "--Mapper.ba_refine_principal_point 0",
-        database_path, image_path, output_path, init_max_error);
+        "--Mapper.ba_refine_focal_length {} "
+        "--Mapper.ba_refine_principal_point {}",
+        database_path, image_path, output_path, init_max_error,
+        refine_intrinsic, refine_intrinsic);
     logger->info(
         "---------------------------------------------------------------------------------");
     logger->info("- Way 3: GLOMAP MAPPER (RECOMMEND) -");
@@ -498,9 +503,47 @@ ns_veta::Veta::Ptr CalibSolver::TryLoadSfMData(const std::string &topic,
     // cameras
     assert(cameras.size() == 1);
     const auto &camera = cameras.cbegin()->second;
-    assert(camera.params_.size() == 4);
+    assert(camera.params_.size() == 4);  // PINHOLE model: fx, fy, cx, cy
     const auto &intriIdx = camera.camera_id_;
-    auto intri = std::make_shared<ns_veta::PinholeIntrinsic>(*_parMagr->INTRI.Camera.at(topic));
+
+    // Get the original intrinsic parameters from config
+    const auto &origIntri = _parMagr->INTRI.Camera.at(topic);
+    const auto &origParams = origIntri->GetParams();
+    const double origFx = origParams[0], origFy = origParams[1];
+    const double origCx = origParams[2], origCy = origParams[3];
+
+    // COLMAP-estimated intrinsic parameters
+    const double colmapFx = camera.params_[0], colmapFy = camera.params_[1];
+    const double colmapCx = camera.params_[2], colmapCy = camera.params_[3];
+
+    ns_veta::PinholeIntrinsic::Ptr intri;
+    if (Configor::Prior::CameraIntrinsicSelfCalib) {
+        // Log intrinsic self-calibration results
+        // Note: Images are undistorted before COLMAP, so only fx, fy, cx, cy are relevant
+        spdlog::info("Camera intrinsic self-calibration enabled for topic '{}':", topic);
+        spdlog::info("  Focal length: fx {:.3f} -> {:.3f} (delta: {:+.3f}), "
+                     "fy {:.3f} -> {:.3f} (delta: {:+.3f})",
+                     origFx, colmapFx, colmapFx - origFx,
+                     origFy, colmapFy, colmapFy - origFy);
+        spdlog::info("  Principal point: cx {:.3f} -> {:.3f} (delta: {:+.3f}), "
+                     "cy {:.3f} -> {:.3f} (delta: {:+.3f})",
+                     origCx, colmapCx, colmapCx - origCx,
+                     origCy, colmapCy, colmapCy - origCy);
+
+        // Use COLMAP-estimated intrinsics for the veta structure
+        // This ensures consistency between estimated poses and the intrinsic used to interpret them
+        // Note: Create a simple PinholeIntrinsic since images are undistorted (no distortion needed)
+        intri = ns_veta::PinholeIntrinsic::Create(
+            camera.width_, camera.height_,          // image dimensions from COLMAP
+            colmapFx, colmapFy, colmapCx, colmapCy  // COLMAP-estimated intrinsics
+        );
+    } else {
+        // Use pre-calibrated intrinsics from config file (traditional iKalibr behavior)
+        spdlog::info("Using pre-calibrated intrinsics for topic '{}' "
+                     "(fx={:.3f}, fy={:.3f}, cx={:.3f}, cy={:.3f})",
+                     topic, origFx, origFy, origCx, origCy);
+        intri = std::make_shared<ns_veta::PinholeIntrinsic>(*origIntri);
+    }
     veta->intrinsics.insert({intriIdx, intri});
 
     // from images to our views and poses
